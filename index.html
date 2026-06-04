@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<!--
+  费用分摊器 (Expense Splitter)
+  适合一起旅行/聚餐/合租：记下"谁付了多少钱、由谁一起分摊"，自动算出最后"谁该还谁多少"。
+  数据全部存在浏览器本地（localStorage），不上传。双击本文件即可使用。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>费用分摊器</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f4f6fb; color: #1f2937; min-height: 100vh; padding: 28px 16px 60px;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    .sub { color: #6b7280; font-size: 14px; margin-bottom: 22px; }
+
+    .card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 18px; box-shadow: 0 2px 14px rgba(0,0,0,0.05); }
+    .card h2 { font-size: 16px; margin-bottom: 14px; }
+
+    label { display: block; font-size: 13px; color: #6b7280; margin: 10px 0 5px; }
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #d1d5db;
+      font-size: 15px; outline: none; background: #fff; color: #1f2937;
+    }
+    input:focus, select:focus { border-color: #6c8cff; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    button {
+      border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+      background: #6c8cff; color: #fff; font-size: 14px; font-weight: 600; margin-top: 14px;
+    }
+    button:hover { background: #5a78f0; }
+    button.ghost { background: #eef1f8; color: #4b5563; margin-top: 0; padding: 6px 12px; font-size: 13px; }
+    button.ghost:hover { background: #e2e7f3; }
+
+    .people-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .tag { background: #eef1f8; border-radius: 20px; padding: 6px 12px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .tag .x { cursor: pointer; color: #9ca3af; font-weight: 700; }
+    .tag .x:hover { color: #ef4444; }
+
+    .split-pick { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+    .split-pick label { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 14px; color: #1f2937; cursor: pointer; }
+    .split-pick input { width: auto; }
+
+    .expense { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #f0f1f5; font-size: 14px; }
+    .expense:last-child { border-bottom: none; }
+    .expense .meta { color: #6b7280; font-size: 12px; }
+    .expense .amt { font-weight: 700; }
+    .del { cursor: pointer; color: #9ca3af; margin-left: 10px; }
+    .del:hover { color: #ef4444; }
+
+    .result-line { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f0f1f5; font-size: 15px; }
+    .result-line:last-child { border-bottom: none; }
+    .settle { background: #e9fbef; color: #047857; padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; font-size: 15px; }
+    .all-clear { color: #6b7280; text-align: center; padding: 16px; }
+    .empty { color: #9ca3af; font-size: 14px; padding: 8px 0; }
+    .total { font-size: 13px; color: #6b7280; margin-top: 12px; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>💸 费用分摊器</h1>
+    <p class="sub">一起出钱的场合，记下谁付了多少，自动算出最后谁该还谁多少。</p>
+
+    <!-- 第一步：成员 -->
+    <div class="card">
+      <h2>① 参与的人</h2>
+      <div class="row">
+        <input type="text" id="personInput" placeholder="名字，比如：小明">
+        <button onclick="addPerson()" style="flex:0 0 auto; margin-top:0;">添加</button>
+      </div>
+      <div class="people-tags" id="peopleTags"></div>
+    </div>
+
+    <!-- 第二步：记一笔账 -->
+    <div class="card">
+      <h2>② 记一笔支出</h2>
+      <label>这笔钱花在哪？</label>
+      <input type="text" id="expDesc" placeholder="比如：晚餐 / 打车 / 门票">
+      <div class="row">
+        <div>
+          <label>谁付的钱？</label>
+          <select id="expPayer"></select>
+        </div>
+        <div>
+          <label>金额（元）</label>
+          <input type="number" id="expAmount" placeholder="0.00" min="0" step="0.01">
+        </div>
+      </div>
+      <label>由谁一起分摊？（默认全选）</label>
+      <div class="split-pick" id="splitPick"></div>
+      <button onclick="addExpense()">＋ 记这一笔</button>
+    </div>
+
+    <!-- 账目列表 -->
+    <div class="card">
+      <h2>③ 账目记录</h2>
+      <div id="expenseList"></div>
+      <div class="total" id="totalLine"></div>
+    </div>
+
+    <!-- 结算结果 -->
+    <div class="card">
+      <h2>④ 最终结算</h2>
+      <div id="result"></div>
+    </div>
+  </div>
+
+  <script>
+    /* 数据：
+       people   = ["小明", "小红", ...]
+       expenses = [{ desc, payer, amount, sharedBy: [人名...] }] */
+    let people = JSON.parse(localStorage.getItem('split_people') || '[]');
+    let expenses = JSON.parse(localStorage.getItem('split_expenses') || '[]');
+    function save() {
+      localStorage.setItem('split_people', JSON.stringify(people));
+      localStorage.setItem('split_expenses', JSON.stringify(expenses));
+    }
+
+    // ---------- 成员 ----------
+    function addPerson() {
+      const input = document.getElementById('personInput');
+      const name = input.value.trim();
+      if (!name) return;
+      if (people.includes(name)) { alert('已经有这个名字啦'); return; }
+      people.push(name);
+      input.value = '';
+      save(); renderAll();
+    }
+    function removePerson(name) {
+      // 如果这个人参与过账目，提醒一下
+      const used = expenses.some(e => e.payer === name || e.sharedBy.includes(name));
+      if (used && !confirm(`「${name}」已出现在账目里，删除会一并清理相关账目，继续？`)) return;
+      people = people.filter(p => p !== name);
+      expenses = expenses
+        .filter(e => e.payer !== name)                      // 删掉他付的账
+        .map(e => ({ ...e, sharedBy: e.sharedBy.filter(p => p !== name) })) // 从分摊名单里移除
+        .filter(e => e.sharedBy.length > 0);                // 没人分摊的账作废
+      save(); renderAll();
+    }
+    document.getElementById('personInput').addEventListener('keydown', e => { if (e.key === 'Enter') addPerson(); });
+
+    // ---------- 记账 ----------
+    function addExpense() {
+      const desc = document.getElementById('expDesc').value.trim() || '一笔支出';
+      const payer = document.getElementById('expPayer').value;
+      const amount = parseFloat(document.getElementById('expAmount').value);
+      const sharedBy = [...document.querySelectorAll('.split-pick input:checked')].map(c => c.value);
+
+      if (people.length < 2) { alert('先在上面添加至少 2 个人'); return; }
+      if (!payer) { alert('请选择付钱的人'); return; }
+      if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
+      if (sharedBy.length === 0) { alert('请至少选一个分摊的人'); return; }
+
+      expenses.push({ desc, payer, amount, sharedBy });
+      document.getElementById('expDesc').value = '';
+      document.getElementById('expAmount').value = '';
+      save(); renderAll();
+    }
+    function removeExpense(i) { expenses.splice(i, 1); save(); renderAll(); }
+
+    // ---------- 渲染：成员标签 ----------
+    function renderPeople() {
+      const box = document.getElementById('peopleTags');
+      box.innerHTML = people.length === 0
+        ? '<span class="empty">还没有人，先添加成员～</span>'
+        : people.map(p => `<span class="tag">${escapeHtml(p)} <span class="x" onclick="removePerson('${escapeJs(p)}')">×</span></span>`).join('');
+    }
+
+    // ---------- 渲染：付款人下拉 + 分摊勾选 ----------
+    function renderPickers() {
+      const payerSel = document.getElementById('expPayer');
+      payerSel.innerHTML = people.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+      const pick = document.getElementById('splitPick');
+      pick.innerHTML = people.length === 0
+        ? '<span class="empty">先添加成员</span>'
+        : people.map(p => `<label><input type="checkbox" value="${escapeHtml(p)}" checked> ${escapeHtml(p)}</label>`).join('');
+    }
+
+    // ---------- 渲染：账目列表 ----------
+    function renderExpenses() {
+      const box = document.getElementById('expenseList');
+      if (expenses.length === 0) { box.innerHTML = '<div class="empty">还没有账目记录</div>'; document.getElementById('totalLine').textContent = ''; return; }
+      box.innerHTML = expenses.map((e, i) => `
+        <div class="expense">
+          <div>
+            <div>${escapeHtml(e.desc)}</div>
+            <div class="meta">${escapeHtml(e.payer)} 付款 · ${e.sharedBy.length} 人分摊</div>
+          </div>
+          <div>
+            <span class="amt">¥${e.amount.toFixed(2)}</span>
+            <span class="del" onclick="removeExpense(${i})">🗑</span>
+          </div>
+        </div>`).join('');
+      const total = expenses.reduce((s, e) => s + e.amount, 0);
+      document.getElementById('totalLine').textContent = `总支出 ¥${total.toFixed(2)}`;
+    }
+
+    // ---------- 核心：计算每个人的余额，再算出最少的还款方案 ----------
+    function computeSettlement() {
+      // 1) 每个人净余额 = 他垫付的总额 - 他应分摊的总额。正数=别人欠他，负数=他欠别人。
+      const balance = {};
+      people.forEach(p => balance[p] = 0);
+      expenses.forEach(e => {
+        const share = e.amount / e.sharedBy.length;
+        balance[e.payer] += e.amount;            // 他先垫了全款
+        e.sharedBy.forEach(p => balance[p] -= share); // 每个分摊人各扣一份
+      });
+
+      // 2) 把"欠钱的人"和"该收钱的人"配对，贪心地抵消，得到尽量少的转账笔数
+      const debtors = [], creditors = [];
+      Object.entries(balance).forEach(([name, amt]) => {
+        const v = Math.round(amt * 100) / 100; // 保留两位小数，避免浮点误差
+        if (v < -0.005) debtors.push({ name, amt: -v });   // 欠多少
+        else if (v > 0.005) creditors.push({ name, amt: v }); // 该收多少
+      });
+      const transfers = [];
+      let i = 0, j = 0;
+      while (i < debtors.length && j < creditors.length) {
+        const pay = Math.min(debtors[i].amt, creditors[j].amt);
+        transfers.push({ from: debtors[i].name, to: creditors[j].name, amount: pay });
+        debtors[i].amt -= pay; creditors[j].amt -= pay;
+        if (debtors[i].amt < 0.005) i++;
+        if (creditors[j].amt < 0.005) j++;
+      }
+      return { balance, transfers };
+    }
+
+    function renderResult() {
+      const box = document.getElementById('result');
+      if (people.length < 2 || expenses.length === 0) {
+        box.innerHTML = '<div class="all-clear">添加成员并记几笔账后，这里会显示谁该还谁多少。</div>';
+        return;
+      }
+      const { balance, transfers } = computeSettlement();
+      let html = '';
+      // 每个人的净额
+      people.forEach(p => {
+        const v = balance[p];
+        const tag = v > 0.005 ? `<span style="color:#047857">应收回 ¥${v.toFixed(2)}</span>`
+                  : v < -0.005 ? `<span style="color:#dc2626">需支出 ¥${(-v).toFixed(2)}</span>`
+                  : `<span style="color:#6b7280">已结清</span>`;
+        html += `<div class="result-line"><span>${escapeHtml(p)}</span>${tag}</div>`;
+      });
+      // 转账方案
+      html += '<h2 style="margin:18px 0 12px;">💡 怎么还最省事</h2>';
+      if (transfers.length === 0) {
+        html += '<div class="all-clear">大家已经两清，不用再转账啦 🎉</div>';
+      } else {
+        html += transfers.map(t =>
+          `<div class="settle"><b>${escapeHtml(t.from)}</b> 转给 <b>${escapeHtml(t.to)}</b> <b>¥${t.amount.toFixed(2)}</b></div>`
+        ).join('');
+      }
+      box.innerHTML = html;
+    }
+
+    function renderAll() { renderPeople(); renderPickers(); renderExpenses(); renderResult(); }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function escapeJs(s) { return String(s).replace(/['\\]/g, '\\$&'); }
+
+    renderAll();
+  </script>
+</body>
+</html>
