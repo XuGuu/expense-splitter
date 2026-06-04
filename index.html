@@ -108,6 +108,7 @@
     <div class="card">
       <h2>④ 最终结算</h2>
       <div id="result"></div>
+      <button id="shareBtn" onclick="shareResult()" style="display:none; margin-top:14px;">📋 复制结算文本</button>
     </div>
   </div>
 
@@ -233,10 +234,13 @@
 
     function renderResult() {
       const box = document.getElementById('result');
+      const shareBtn = document.getElementById('shareBtn');
       if (people.length < 2 || expenses.length === 0) {
         box.innerHTML = '<div class="all-clear">添加成员并记几笔账后，这里会显示谁该还谁多少。</div>';
+        shareBtn.style.display = 'none';
         return;
       }
+      shareBtn.style.display = 'inline-block';
       const { balance, transfers } = computeSettlement();
       let html = '';
       // 每个人的净额
@@ -257,6 +261,43 @@
         ).join('');
       }
       box.innerHTML = html;
+    }
+
+    // 生成一段可直接发到群里的纯文本结算结果，复制到剪贴板
+    function shareResult() {
+      const { balance, transfers } = computeSettlement();
+      const total = expenses.reduce((s, e) => s + e.amount, 0);
+      const lines = [
+        '💸 费用分摊结算',
+        `参与：${people.join('、')}`,
+        `总支出：¥${total.toFixed(2)} · 共 ${expenses.length} 笔`,
+        '',
+        '【账目】',
+        ...expenses.map(e => `· ${e.desc}：${e.payer} 付 ¥${e.amount.toFixed(2)}（${e.sharedBy.length} 人分摊）`),
+        '',
+        '【每人净额】',
+        ...people.map(p => {
+          const v = balance[p];
+          if (v > 0.005) return `· ${p}：应收回 ¥${v.toFixed(2)}`;
+          if (v < -0.005) return `· ${p}：需支出 ¥${(-v).toFixed(2)}`;
+          return `· ${p}：已结清`;
+        }),
+        '',
+        '【还款方案】',
+        ...(transfers.length === 0
+          ? ['· 已两清，无需转账 🎉']
+          : transfers.map(t => `· ${t.from} → ${t.to}  ¥${t.amount.toFixed(2)}`)),
+      ];
+      const text = lines.join('\n');
+      navigator.clipboard.writeText(text).then(
+        () => {
+          const btn = document.getElementById('shareBtn');
+          const old = btn.textContent;
+          btn.textContent = '✓ 已复制，去粘贴吧';
+          setTimeout(() => { btn.textContent = old; }, 1800);
+        },
+        () => prompt('复制失败，手动复制下面这段：', text)
+      );
     }
 
     function renderAll() { renderPeople(); renderPickers(); renderExpenses(); renderResult(); }
