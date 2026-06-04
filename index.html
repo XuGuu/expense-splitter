@@ -40,6 +40,8 @@
 
     .people-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
     .tag { background: #eef1f8; border-radius: 20px; padding: 6px 12px; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+    .tag span.name { cursor: text; }
+    .tag input.rename { font-size: 14px; padding: 2px 6px; border-radius: 6px; border: 1px solid #c5cce0; outline: none; width: 90px; }
     .tag .x { cursor: pointer; color: #9ca3af; font-weight: 700; }
     .tag .x:hover { color: #ef4444; }
 
@@ -170,7 +172,32 @@
       const box = document.getElementById('peopleTags');
       box.innerHTML = people.length === 0
         ? '<span class="empty">还没有人，先添加成员～</span>'
-        : people.map(p => `<span class="tag">${escapeHtml(p)} <span class="x" onclick="removePerson('${escapeJs(p)}')">×</span></span>`).join('');
+        : people.map(p => `<span class="tag"><span class="name" ondblclick="renamePerson('${escapeJs(p)}', this)" title="双击重命名">${escapeHtml(p)}</span> <span class="x" onclick="removePerson('${escapeJs(p)}')">×</span></span>`).join('');
+    }
+
+    // 双击成员名字进入重命名：会同步更新所有账目里的引用
+    function renamePerson(oldName, span) {
+      const input = document.createElement('input');
+      input.type = 'text'; input.className = 'rename'; input.value = oldName;
+      span.replaceWith(input); input.focus(); input.select();
+      const commit = () => {
+        const v = input.value.trim();
+        if (!v || v === oldName) { renderAll(); return; }
+        if (people.includes(v)) { alert(`已经有「${v}」了，请换个名字。`); renderAll(); return; }
+        // 把每条账目里 payer 和 sharedBy 里的旧名字也一并改了，保证数据一致
+        people = people.map(p => p === oldName ? v : p);
+        expenses = expenses.map(e => ({
+          ...e,
+          payer: e.payer === oldName ? v : e.payer,
+          sharedBy: e.sharedBy.map(p => p === oldName ? v : p),
+        }));
+        save(); renderAll();
+      };
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') commit();
+        else if (e.key === 'Escape') renderAll();
+      });
+      input.addEventListener('blur', commit);
     }
 
     // ---------- 渲染：付款人下拉 + 分摊勾选 ----------
