@@ -112,6 +112,10 @@
       <div id="result"></div>
       <button id="shareBtn" onclick="shareResult()" style="display:none; margin-top:14px;">📋 复制结算文本</button>
     </div>
+
+    <div style="text-align:center; margin-top: 20px; font-size: 13px; color: #9ca3af;">
+      <a href="#" onclick="clearAll(event)" style="color:#9ca3af;">🧹 全部清空，重新开始一趟</a>
+    </div>
   </div>
 
   <script>
@@ -325,6 +329,14 @@
         },
         () => prompt('复制失败，手动复制下面这段：', text)
       );
+    }
+
+    // 全部清空：一段旅程结清后想重新开始时用
+    function clearAll(e) {
+      e.preventDefault();
+      if (!confirm('确定全部清空？成员和所有账目都会删除，无法恢复。')) return;
+      people = []; expenses = [];
+      save(); renderAll();
     }
 
     function renderAll() { renderPeople(); renderPickers(); renderExpenses(); renderResult(); }
