@@ -27,6 +27,10 @@
 - 用 `Math.round(x*100)/100` 处理金额，避免小数点的浮点误差。
 - 数据存在浏览器 `localStorage` 里，不联网、不上传。
 
+## 📜 更新日志
+
+详见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 📄 许可证
 
 MIT
