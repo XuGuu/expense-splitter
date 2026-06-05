@@ -1,5 +1,8 @@
 # 💸 费用分摊器 Expense Splitter
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![No deps](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](#)
+
 一起旅行、聚餐、合租时，记下「谁付了多少、由谁一起分摊」，自动算出最后**谁该还谁多少钱**，
 并给出转账笔数最少的还款方案。纯前端、零依赖、双击即用，数据存在本地。
 
