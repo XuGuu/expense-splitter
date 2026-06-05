@@ -49,8 +49,9 @@
     .split-pick label { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 14px; color: #1f2937; cursor: pointer; }
     .split-pick input { width: auto; }
 
-    .expense { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid #f0f1f5; font-size: 14px; }
+    .expense { display: flex; justify-content: space-between; align-items: center; padding: 11px 8px; border-bottom: 1px solid #f0f1f5; font-size: 14px; border-radius: 6px; transition: background .15s; }
     .expense:last-child { border-bottom: none; }
+    .expense.editing { background: #fffbe6; outline: 1px solid #fde68a; }
     .expense .meta { color: #6b7280; font-size: 12px; }
     .expense .amt { font-weight: 700; }
     .del { cursor: pointer; color: #9ca3af; margin-left: 10px; }
@@ -96,7 +97,8 @@
       </div>
       <label>由谁一起分摊？（默认全选）</label>
       <div class="split-pick" id="splitPick"></div>
-      <button onclick="addExpense()">＋ 记这一笔</button>
+      <button id="submitExpBtn" onclick="submitExpense()">＋ 记这一笔</button>
+      <button id="cancelEditBtn" onclick="cancelEdit()" class="ghost" style="display:none; margin-left:8px;">取消编辑</button>
     </div>
 
     <!-- 账目列表 -->
@@ -152,8 +154,11 @@
     }
     document.getElementById('personInput').addEventListener('keydown', e => { if (e.key === 'Enter') addPerson(); });
 
-    // ---------- 记账 ----------
-    function addExpense() {
+    // ---------- 记账 / 编辑 ----------
+    // editingIndex = null 表示新增；= 数字表示正在编辑第几条
+    let editingIndex = null;
+
+    function submitExpense() {
       const desc = document.getElementById('expDesc').value.trim() || '一笔支出';
       const payer = document.getElementById('expPayer').value;
       const amount = parseFloat(document.getElementById('expAmount').value);
@@ -164,12 +169,40 @@
       if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
       if (sharedBy.length === 0) { alert('请至少选一个分摊的人'); return; }
 
-      expenses.push({ desc, payer, amount, sharedBy });
-      document.getElementById('expDesc').value = '';
-      document.getElementById('expAmount').value = '';
+      const data = { desc, payer, amount, sharedBy };
+      if (editingIndex === null) expenses.push(data);
+      else expenses[editingIndex] = data;
+      cancelEdit();           // 顺便清空表单 + 重置按钮文案
       save(); renderAll();
     }
-    function removeExpense(i) { expenses.splice(i, 1); save(); renderAll(); }
+
+    function startEdit(i) {
+      const e = expenses[i]; if (!e) return;
+      editingIndex = i;
+      document.getElementById('expDesc').value = e.desc;
+      document.getElementById('expPayer').value = e.payer;
+      document.getElementById('expAmount').value = e.amount;
+      // 先全部取消勾选，再勾上原来的分摊人
+      document.querySelectorAll('.split-pick input').forEach(cb => { cb.checked = e.sharedBy.includes(cb.value); });
+      document.getElementById('submitExpBtn').textContent = '✓ 保存修改';
+      document.getElementById('cancelEditBtn').style.display = 'inline-block';
+      document.getElementById('expDesc').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('expDesc').focus();
+    }
+
+    function cancelEdit() {
+      editingIndex = null;
+      document.getElementById('expDesc').value = '';
+      document.getElementById('expAmount').value = '';
+      document.querySelectorAll('.split-pick input').forEach(cb => { cb.checked = true; }); // 还原默认全选
+      document.getElementById('submitExpBtn').textContent = '＋ 记这一笔';
+      document.getElementById('cancelEditBtn').style.display = 'none';
+    }
+
+    function removeExpense(i) {
+      if (editingIndex === i) cancelEdit(); // 删的就是正在编辑的那条 → 顺便退出编辑
+      expenses.splice(i, 1); save(); renderAll();
+    }
 
     // ---------- 渲染：成员标签 ----------
     function renderPeople() {
@@ -219,14 +252,15 @@
       const box = document.getElementById('expenseList');
       if (expenses.length === 0) { box.innerHTML = '<div class="empty">还没有账目记录</div>'; document.getElementById('totalLine').textContent = ''; return; }
       box.innerHTML = expenses.map((e, i) => `
-        <div class="expense">
+        <div class="expense ${editingIndex === i ? 'editing' : ''}">
           <div>
             <div>${escapeHtml(e.desc)}</div>
             <div class="meta">${escapeHtml(e.payer)} 付款 · ${e.sharedBy.length} 人分摊</div>
           </div>
           <div>
             <span class="amt">¥${e.amount.toFixed(2)}</span>
-            <span class="del" onclick="removeExpense(${i})">🗑</span>
+            <span class="del" onclick="startEdit(${i})" title="编辑">✏️</span>
+            <span class="del" onclick="removeExpense(${i})" title="删除">🗑</span>
           </div>
         </div>`).join('');
       const total = expenses.reduce((s, e) => s + e.amount, 0);
