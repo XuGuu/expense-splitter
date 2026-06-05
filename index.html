@@ -94,6 +94,10 @@
           <label>金额（元）</label>
           <input type="number" id="expAmount" placeholder="0.00" min="0" step="0.01">
         </div>
+        <div>
+          <label>日期</label>
+          <input type="date" id="expDate">
+        </div>
       </div>
       <label>由谁一起分摊？（默认全选）</label>
       <div class="split-pick" id="splitPick"></div>
@@ -162,6 +166,7 @@
       const desc = document.getElementById('expDesc').value.trim() || '一笔支出';
       const payer = document.getElementById('expPayer').value;
       const amount = parseFloat(document.getElementById('expAmount').value);
+      const date = document.getElementById('expDate').value || todayKey();
       const sharedBy = [...document.querySelectorAll('.split-pick input:checked')].map(c => c.value);
 
       if (people.length < 2) { alert('先在上面添加至少 2 个人'); return; }
@@ -169,11 +174,16 @@
       if (!amount || amount <= 0) { alert('请输入正确的金额'); return; }
       if (sharedBy.length === 0) { alert('请至少选一个分摊的人'); return; }
 
-      const data = { desc, payer, amount, sharedBy };
+      const data = { desc, payer, amount, sharedBy, date };
       if (editingIndex === null) expenses.push(data);
       else expenses[editingIndex] = data;
       cancelEdit();           // 顺便清空表单 + 重置按钮文案
       save(); renderAll();
+    }
+    // 今天的 YYYY-MM-DD 字符串（默认填到日期输入框）
+    function todayKey() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     }
 
     function startEdit(i) {
@@ -182,6 +192,7 @@
       document.getElementById('expDesc').value = e.desc;
       document.getElementById('expPayer').value = e.payer;
       document.getElementById('expAmount').value = e.amount;
+      document.getElementById('expDate').value = e.date || todayKey();
       // 先全部取消勾选，再勾上原来的分摊人
       document.querySelectorAll('.split-pick input').forEach(cb => { cb.checked = e.sharedBy.includes(cb.value); });
       document.getElementById('submitExpBtn').textContent = '✓ 保存修改';
@@ -194,6 +205,7 @@
       editingIndex = null;
       document.getElementById('expDesc').value = '';
       document.getElementById('expAmount').value = '';
+      document.getElementById('expDate').value = todayKey();
       document.querySelectorAll('.split-pick input').forEach(cb => { cb.checked = true; }); // 还原默认全选
       document.getElementById('submitExpBtn').textContent = '＋ 记这一笔';
       document.getElementById('cancelEditBtn').style.display = 'none';
@@ -255,7 +267,7 @@
         <div class="expense ${editingIndex === i ? 'editing' : ''}">
           <div>
             <div>${escapeHtml(e.desc)}</div>
-            <div class="meta">${escapeHtml(e.payer)} 付款 · ${e.sharedBy.length} 人分摊</div>
+            <div class="meta">${escapeHtml(e.payer)} 付款 · ${e.sharedBy.length} 人分摊${e.date ? ' · ' + escapeHtml(e.date) : ''}</div>
           </div>
           <div>
             <span class="amt">¥${e.amount.toFixed(2)}</span>
@@ -338,7 +350,7 @@
         `总支出：¥${total.toFixed(2)} · 共 ${expenses.length} 笔`,
         '',
         '【账目】',
-        ...expenses.map(e => `· ${e.desc}：${e.payer} 付 ¥${e.amount.toFixed(2)}（${e.sharedBy.length} 人分摊）`),
+        ...expenses.map(e => `· ${e.date ? '[' + e.date + '] ' : ''}${e.desc}：${e.payer} 付 ¥${e.amount.toFixed(2)}（${e.sharedBy.length} 人分摊）`),
         '',
         '【每人净额】',
         ...people.map(p => {
@@ -374,6 +386,9 @@
     }
 
     function renderAll() { renderPeople(); renderPickers(); renderExpenses(); renderResult(); }
+
+    // 页面打开时把日期框预填为今天
+    document.getElementById('expDate').value = todayKey();
 
     function escapeHtml(s) {
       return String(s).replace(/[&<>"']/g, c =>
